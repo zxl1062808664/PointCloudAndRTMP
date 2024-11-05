@@ -1,0 +1,16 @@
+{
+    "name": "RTMP",
+    "rootNamespace": "",
+    "references": [
+        "GUID:2f2202c3d8fd5d648a0af1105f523ab0"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
