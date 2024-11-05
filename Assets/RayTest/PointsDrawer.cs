@@ -17,7 +17,6 @@ namespace ZC
         private int population;
         private float range;
         private Mesh mesh;
-        private Bounds bounds;
         private Material material;
 
         private ComputeBuffer meshPropertiesBuffer;
@@ -37,13 +36,12 @@ namespace ZC
             }
         }
 
-        public void Setup(Mesh mesh, int population, float range, Bounds bounds, Material material)
+        public void Setup(Mesh mesh, int population, float range ,Material material)
         {
             this.mesh = mesh;
             this.population = population;
             this.range = range;
             this.material = material;
-            this.bounds = bounds;
 
             InitializeBuffers();
         }
@@ -98,31 +96,14 @@ namespace ZC
             argsBuffer = null;
             this._properties.Dispose();
         }
-
-        public void RandomPosition()
-        {
-            RandomTransformJob job = new RandomTransformJob()
-            {
-                properties = this._properties,
-                range = this.range,
-                random = Unity.Mathematics.Random.CreateFromIndex(_random.NextUInt()),
-                draw = !Input.GetKey(KeyCode.C)
-            };
-            job.Schedule(this._properties.Length, 1).Complete();
-
-            meshPropertiesBuffer.SetData(this._properties);
-
-            material.SetBuffer(id_properties, meshPropertiesBuffer);
-
-            Graphics.DrawMeshInstancedIndirect(mesh, 0, material, bounds, argsBuffer);
-        }
-
-        public void Render(NativeArray<ZPointInfo> frames)
+        public void Render(NativeArray<ZPointInfo> frames, int hitCount,Bounds bounds, float3 position)
         {
             TransformJob job = new TransformJob()
             {
                 properties = this._properties,
-                frames = frames
+                frames = frames,
+                count = hitCount,
+                position=position,
             };
             job.Schedule(_properties.Length, 1).Complete();
 
@@ -138,25 +119,28 @@ namespace ZC
         {
             public NativeArray<MeshProperties> properties;
             public NativeArray<ZPointInfo> frames;
+            public int count;
+            public float3 position;
 
             public void Execute(int i)
             {
-                var frame = this.frames[i];
                 MeshProperties props = new MeshProperties();
-                if (!frame.isDraw)
+                if (i >= count)
                 {
-                    props.color = math.float4(0, 0, 0, 0);
+                    // props.color = math.float4(0, 0, 0, 0);
+                    props.color = math.float4(1, 0, 0, 1);
                     properties[i] = props;
                     return;
                 }
-                float3 position = frame.point;
+                var frame = this.frames[i];
+                float3 localPosition =frame.point -position;
                 const float scale = 0.02f;
                 props.mat = math.float4x4(math.float3x3(
                     scale, 0, 0,
                     0, scale, 0,
                     0, 0, scale
-                ), position);
-                props.color = math.float4(1, 0, 0, 0);
+                ), localPosition);
+                props.color = math.float4(1, 1, 1, 1);
 
                 properties[i] = props;
             }

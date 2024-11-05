@@ -207,7 +207,7 @@ namespace ZC
             handle3.Complete();
             Profiler.EndSample();
             Profiler.BeginSample("RenderPoints");
-            _pointsDrawer.Render(flattenedPointsInfo);
+            // _pointsDrawer.Render(flattenedPointsInfo);
             SaveData();
             Profiler.EndSample();
         }
