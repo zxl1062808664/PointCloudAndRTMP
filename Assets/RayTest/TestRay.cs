@@ -1,9 +1,12 @@
-﻿using System.Collections;
+﻿using System.Buffers;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using ROS2;
+using sensor_msgs.msg;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -27,47 +30,46 @@ namespace ZC
         [SerializeField] private Mesh _mesh;
         [SerializeField] private Material _mat;
         [SerializeField] private Camera _camera;
-        public ParticleSystem _particleSystem;
         private PointsDrawer _pointsDrawer;
 
         private NativeArray<RaycastHit> results;
-        private NativeArray<ParticleSystem.Particle> particles;
         private NativeArray<RaycastCommand> commands;
         private NativeArray<TransData> rayCaster;
         private NativeArray<ZPointInfo> flattenedPointsInfo;
-        private NativeArray<CvsData> cvsDatas;
+        private NativeArray<PointCvsData> cvsDatas;
+        private NativeArray<ZPointFullInfo> flattenedPointsFullInfo;
 
         private bool _isRunning;
 
-        private List<Renderer> _renderers = new List<Renderer>(150000);
+        private IPublisher<PointCloud2> chatter_pub;
 
-        public void AddRenderer(Renderer renderer)
+        string[] names = new[]
         {
-            this._renderers.Add(renderer);
-        }
+            "x",
+            "y",
+            "z",
+            "s",
+        };
 
+        PointCloud2 s;
+        [SerializeField] private Bounds _bounds;
+
+        private NativeArray<int> _hitCountArray;
+
+        
         private void Start()
         {
-            //        var o = new GameObject();
-            //        for (var i = 0; i < 10000; i++)
-            //        {
-            //            var insideUnitSphere = UnityEngine.Random.insideUnitSphere * 100;
-            //            var primitive = UnityEngine.GameObject.CreatePrimitive(PrimitiveType.Cube);
-            //            primitive.transform.position = insideUnitSphere;
-            //            primitive.transform.parent = o.transform;
-            //            _renderers.Add(primitive.GetComponent<Renderer>());
-            //        }
-
-
             rayCount = horizontalRaysCount * verticalRaysCount;
             _pointsDrawer = new PointsDrawer();
-            _pointsDrawer.Setup(_mesh, rayCount, 1000, new Bounds(default, Vector3.one * (1000 + 1)), _mat);
+            _pointsDrawer.Setup(_mesh, rayCount, 1000, _mat);
             results = new NativeArray<RaycastHit>(rayCount, Allocator.Persistent);
             commands = new NativeArray<RaycastCommand>(rayCount, Allocator.Persistent);
             rayCaster = new NativeArray<TransData>(rayCount, Allocator.Persistent);
-            particles = new NativeArray<ParticleSystem.Particle>(rayCount, Allocator.Persistent);
+            _hitCountArray = new NativeArray<int>(1, Allocator.Persistent);
             flattenedPointsInfo = new NativeArray<ZPointInfo>(rayCount, Allocator.Persistent); // 初始化存储点信息的列表，预先分配空间
-            cvsDatas = new NativeArray<CvsData>(rayCount, Allocator.Persistent); // 初始化存储点信息的列表，预先分配空间
+            cvsDatas = new NativeArray<PointCvsData>(rayCount, Allocator.Persistent); // 初始化存储点信息的列表，预先分配空间
+            flattenedPointsFullInfo =
+                new NativeArray<ZPointFullInfo>(rayCount, Allocator.Persistent); // 初始化存储点信息的列表，预先分配空间
             StartCoroutine(InitRays());
         }
 
@@ -77,46 +79,33 @@ namespace ZC
             results.Dispose();
             commands.Dispose();
             rayCaster.Dispose();
-            particles.Dispose();
             flattenedPointsInfo.Dispose();
             cvsDatas.Dispose();
+            _hitCountArray.Dispose();
+            flattenedPointsFullInfo.Dispose();
             StopAllCoroutines();
         }
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.S))
+            if (Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.M))
             {
-                Debug.Log("Start");
+                _isSaveData = !_isSaveData;
+            }
+
+            if (Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.Keypad0))
+            {
+                _isShowPointsData = !_isShowPointsData;
+            }
+
+            if (Input.GetKeyDown(KeyCode.Q))
+            {
                 this._isRunning = true;
             }
 
-            if (Input.GetKeyDown(KeyCode.D))
+            if (Input.GetKeyDown(KeyCode.E))
             {
-                Debug.Log("Stop");
                 this._isRunning = false;
-            }
-
-            if (Input.GetKeyDown(KeyCode.Y))
-            {
-                Debug.Log("Stop");
-                this.isSave = !isSave;
-            }
-
-            if (Input.GetKeyDown(KeyCode.K))
-            {
-                foreach (var renderer1 in this._renderers)
-                {
-                    renderer1.enabled = false;
-                }
-            }
-
-            if (Input.GetKeyDown(KeyCode.L))
-            {
-                foreach (var renderer1 in this._renderers)
-                {
-                    renderer1.enabled = true;
-                }
             }
 
             if (this._isRunning)
@@ -176,7 +165,6 @@ namespace ZC
 
         void RayTest()
         {
-            Profiler.BeginSample("ExecuteJobs");
             float3 transformPosition = this._camera.transform.position;
             quaternion transformRotation = this._camera.transform.rotation;
             BuildRaycastCommandJob rJob = new BuildRaycastCommandJob
@@ -188,104 +176,129 @@ namespace ZC
                 parentRot = transformRotation
             };
             var handle1 = rJob.Schedule(this.rayCount, 1);
-
             JobHandle handle2 =
                 RaycastCommand.ScheduleBatch(rJob.commands, results, 100, dependsOn: handle1); //调度批量射线投射命令
-
-
+            _hitCountArray[0] = 0;
             HandleHitResultJob jJob = new HandleHitResultJob
             {
                 rayCaster = this.rayCaster,
                 hitResults = this.results,
-                frameInfo = this.flattenedPointsInfo,
-                cvsDatas = this.cvsDatas,
                 parentRot = transformRotation,
                 parentPos = transformPosition,
+                frameFullInfo = flattenedPointsFullInfo
+            };
+            var handle3 = jJob.Schedule(results.Length, 1, dependsOn: handle2);
+            RemoveInvalidResultJob removeInvalidResultJob = new RemoveInvalidResultJob()
+            {
+                frameInfo = this.flattenedPointsInfo,
+                cvsDatas = this.cvsDatas,
+                hitCount = _hitCountArray,
+                frameFullInfo = flattenedPointsFullInfo
             };
 
-            var handle3 = jJob.Schedule(this.rayCount, 1, dependsOn: handle2);
-            handle3.Complete();
-            Profiler.EndSample();
-            Profiler.BeginSample("RenderPoints");
-            // _pointsDrawer.Render(flattenedPointsInfo);
-            SaveData();
-            Profiler.EndSample();
+            var handle4 = removeInvalidResultJob.Schedule(dependsOn: handle3);
+            handle4.Complete();
+            var hitCount = _hitCountArray[0];
+            if (_isShowPointsData)
+            {
+                _bounds = new Bounds(transformPosition, Vector3.one * (1000 + 1));
+                _pointsDrawer.Render(flattenedPointsInfo, hitCount, _bounds, transformPosition);
+            }
+
+            if (_isSaveData)
+                SaveData();
+
+            PublishData(flattenedPointsInfo, hitCount);
         }
 
-        private bool isSave;
+        private void PublishData(NativeArray<ZPointInfo> frameInfos, int hitCount)
+        {
+            unsafe
+            {
+                s = new PointCloud2();
+
+                s.Width = (uint)hitCount;
+                s.Height = 1;
+                if (s.Fields == null)
+                {
+                    s.Fields = new PointField[]
+                    {
+                        new PointField
+                        {
+                            Name = names[0],
+                            Offset = 0,
+                            Datatype = PointField.FLOAT32,
+                            Count = 1
+                        },
+                        new PointField
+                        {
+                            Name = names[1],
+                            Offset = 4,
+                            Datatype = PointField.FLOAT32,
+                            Count = 1
+                        },
+                        new PointField
+                        {
+                            Name = names[2],
+                            Offset = 8,
+                            Datatype = PointField.FLOAT32,
+                            Count = 1
+                        },
+                        new PointField
+                        {
+                            Name = names[3],
+                            Offset = 12,
+                            Datatype = PointField.FLOAT32,
+                            Count = 1
+                        }
+                    };
+                }
+
+                s.Is_dense = false;
+                s.Point_step = 16;
+                s.Row_step = s.Width * s.Point_step;
+
+                byte[] buffer = ArrayPool<byte>.Shared.Rent((int)s.Row_step);
+                s.Data = buffer;
+
+                var dest = UnsafeUtility.PinGCArrayAndGetDataAddress(buffer, out var handle);
+                try
+                {
+                    var src = frameInfos.GetUnsafePtr();
+                    UnsafeUtility.MemCpy(dest, src, sizeof(float) * 4 * hitCount);
+                }
+                finally
+                {
+                    UnsafeUtility.ReleaseGCObject(handle);
+                }
+
+                chatter_pub.Publish(s);
+                ArrayPool<byte>.Shared.Return(buffer);
+                s.Dispose();
+            }
+        }
+
+        private string testXyzPath = Application.streamingAssetsPath + "/point.xyz";
+
+        [SerializeField] private bool _isSaveData;
+        [SerializeField] private bool _isShowPointsData;
+
         void SaveData()
         {
-            isSave = false;
+            _isSaveData = false;
             var list = cvsDatas.ToList();
-            
+
             // string testCsvPath = $"{Application.streamingAssetsPath}/point.csv";
             // CsvUtility.Write(list, testCsvPath);
-            
-            string testXyzPath = $"{Application.streamingAssetsPath}/point.xyz";
+
             StringBuilder sb = new StringBuilder();
             foreach (var cvsData in list)
             {
                 sb.AppendLine($"{cvsData.x} {cvsData.y} {cvsData.z}");
             }
-            File.WriteAllText(testXyzPath,sb.ToString());
+
+            File.WriteAllText(testXyzPath, sb.ToString());
             sb = null;
-        }
-
-        #region 粒子
-
-        public void RenderPointsCloud(NativeArray<ZPointInfo> frame, int renderCount)
-        {
-            unsafe
-            {
-                Profiler.BeginSample("RenderPointsCloud.Emit");
-                this._particleSystem.Emit(renderCount); // 发射pointCount个粒子
-                Profiler.EndSample();
-                Profiler.BeginSample("RenderPointsCloud.GetParticles");
-                this._particleSystem.GetParticles(this.particles); // 获取当前还存活的粒子数
-                Profiler.EndSample();
-
-                Profiler.BeginSample("RenderPointsCloud.Clear");
-                var asSpan = this.particles.AsSpan();
-                UnsafeUtility.MemClear(
-                    (void*)((nint)UnsafeUtility.AddressOf(ref asSpan[0]) +
-                            renderCount * UnsafeUtility.SizeOf<ParticleSystem.Particle>()),
-                    UnsafeUtility.SizeOf<ParticleSystem.Particle>() * (asSpan.Length - renderCount)
-                );
-                Profiler.EndSample();
-
-                Profiler.BeginSample("RenderPointsCloud.Copy");
-                for (int i = 0; i < renderCount; i++)
-                {
-                    var zPointInfo = frame[i];
-                    ref var particle = ref this.particles.AsSpan()[i];
-                    particle.position = zPointInfo.point;
-                    particle.startSize = 0.05f;
-                }
-
-                Profiler.EndSample();
-
-                Profiler.BeginSample("RenderPointsCloud.Apply");
-                this._particleSystem.SetParticles(this.particles, renderCount); // 将点云载入粒子系统
-                Profiler.EndSample();
-            }
-        }
-
-        #endregion
-    }
-
-    struct CvsData
-    {
-        public float x;
-        public float y;
-        public float z;
-        public float dir;
-
-        public CvsData(float x, float y, float z, float dir)
-        {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-            this.dir = dir;
         }
     }
 
@@ -324,8 +337,7 @@ namespace ZC
         [ReadOnly] public float3 parentPos;
         [ReadOnly] public quaternion parentRot;
 
-        public NativeArray<ZPointInfo> frameInfo;
-        public NativeArray<CvsData> cvsDatas;
+        public NativeArray<ZPointFullInfo> frameFullInfo;
 
         public void Execute(int i)
         {
@@ -333,8 +345,7 @@ namespace ZC
             var isHit = hit.colliderInstanceID != 0;
             if (!isHit)
             {
-                this.frameInfo[i] = new ZPointInfo(default, 0, false);
-                cvsDatas[i] = new CvsData(0, 0, 0, 0);
+                this.frameFullInfo[i] = new ZPointFullInfo(default, default, false);
                 return; // 若未命中碰撞体，则跳过
             }
 
@@ -342,26 +353,49 @@ namespace ZC
             var quaternion = math.mul(parentRot, transData.localRotation);
             var forward = math.mul(quaternion, math.forward());
             var dir = math.abs(math.dot(hit.normal, forward));
-            this.frameInfo[i] = new ZPointInfo(hit.point, dir, true);
-            this.cvsDatas[i] = new CvsData(hit.point.x, hit.point.y, hit.point.z, dir);
+            this.frameFullInfo[i] = new ZPointFullInfo(hit.point, dir, true);
             //                UnsafeUtility.MemCpy(UnsafeUtility.AddressOf(ref frameSpan[i]), UnsafeUtility.AddressOf(ref hit), sizeof(Vector3));
         }
     }
 
+
+    [BurstCompile]
+    struct RemoveInvalidResultJob : IJob
+    {
+        [ReadOnly] public NativeArray<ZPointFullInfo> frameFullInfo;
+        public NativeArray<ZPointInfo> frameInfo;
+        public NativeArray<PointCvsData> cvsDatas;
+
+        public NativeArray<int> hitCount;
+
+        public void Execute()
+        {
+            for (var i = 0; i < frameFullInfo.Length; i++)
+            {
+                ZPointFullInfo info = this.frameFullInfo[i];
+                if (info.isvaild)
+                {
+                    cvsDatas[hitCount[0]] = new PointCvsData(info.point.x, info.point.y, info.point.z, info.dir);
+                    frameInfo[hitCount[0]++] = new ZPointInfo(info.point, info.dir);
+                }
+            }
+        }
+    }
+
+
     #region mD
 
-    [StructLayout(LayoutKind.Sequential)]
-    public struct ZPointInfo
+    public struct ZPointFullInfo
     {
         private float3 _point;
         private float _dir;
-        private bool _isDraw;
+        private bool _isvaild;
 
-        public ZPointInfo(float3 point, float dir, bool isDraw)
+        public ZPointFullInfo(float3 point, float dir, bool isvaild)
         {
             _point = point;
             _dir = dir;
-            _isDraw = isDraw;
+            this._isvaild = isvaild;
         }
 
         public float3 point
@@ -370,14 +404,50 @@ namespace ZC
             set => this._point = value;
         }
 
-        public bool isDraw
+
+        public float dir => _dir;
+
+        public bool isvaild => _isvaild;
+    }
+
+    [System.Serializable]
+    [StructLayout(LayoutKind.Explicit, Size = 16)]
+    public struct ZPointInfo
+    {
+        [FieldOffset(0)] public float3 _point;
+        [FieldOffset(12)] public float _dir;
+
+        public ZPointInfo(float3 point, float dir)
         {
-            get => this._isDraw;
-            set => this._isDraw = value;
+            _point = point;
+            _dir = dir;
         }
+
+        public float3 point
+        {
+            get => this._point;
+            set => this._point = value;
+        }
+
 
         public float dir => _dir;
     }
 
     #endregion
+
+    struct PointCvsData
+    {
+        public float x;
+        public float y;
+        public float z;
+        public float dir;
+
+        public PointCvsData(float x, float y, float z, float dir)
+        {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.dir = dir;
+        }
+    }
 }
