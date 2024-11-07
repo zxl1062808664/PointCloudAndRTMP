@@ -31,13 +31,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UniTask.TextMeshPro", "UniT
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp-Editor", "Assembly-CSharp-Editor.csproj", "{0a5139d6-c0b7-4dc6-f6ad-66cc4ecacc64}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp-firstpass", "Assembly-CSharp-firstpass.csproj", "{7842a686-a752-417d-1123-7a0e9328505f}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UniTask.DOTween", "UniTask.DOTween.csproj", "{d5cfbffd-7089-fa19-21da-1d2ede02ec6c}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToolBuddy.Curvy.Examples.Editor", "ToolBuddy.Curvy.Examples.Editor.csproj", "{2a4a44c4-de00-b86f-cb0b-23ae0151b000}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UniTask.Editor", "UniTask.Editor.csproj", "{3afca1a7-2c3d-1629-f273-218dcc1e0d37}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp-firstpass", "Assembly-CSharp-firstpass.csproj", "{7842a686-a752-417d-1123-7a0e9328505f}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -74,14 +74,14 @@ Global
 		{2e3ae5f0-36e5-cbd6-5688-72e49570f9fc}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0a5139d6-c0b7-4dc6-f6ad-66cc4ecacc64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0a5139d6-c0b7-4dc6-f6ad-66cc4ecacc64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7842a686-a752-417d-1123-7a0e9328505f}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7842a686-a752-417d-1123-7a0e9328505f}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{d5cfbffd-7089-fa19-21da-1d2ede02ec6c}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{d5cfbffd-7089-fa19-21da-1d2ede02ec6c}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2a4a44c4-de00-b86f-cb0b-23ae0151b000}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{2a4a44c4-de00-b86f-cb0b-23ae0151b000}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3afca1a7-2c3d-1629-f273-218dcc1e0d37}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{3afca1a7-2c3d-1629-f273-218dcc1e0d37}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7842a686-a752-417d-1123-7a0e9328505f}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7842a686-a752-417d-1123-7a0e9328505f}.Debug|Any CPU.Build.0 = Debug|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

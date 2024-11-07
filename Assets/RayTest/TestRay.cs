@@ -84,6 +84,8 @@ namespace ZC
             _hitCountArray.Dispose();
             flattenedPointsFullInfo.Dispose();
             StopAllCoroutines();
+            chatter_pub.Dispose();
+            
         }
 
         private void Update()
@@ -202,7 +204,7 @@ namespace ZC
             if (_isShowPointsData)
             {
                 _bounds = new Bounds(transformPosition, Vector3.one * (1000 + 1));
-                _pointsDrawer.Render(flattenedPointsInfo, hitCount, _bounds, transformPosition);
+                _pointsDrawer.Render(flattenedPointsInfo, hitCount, _bounds, transformPosition,_camera.transform.rotation);
             }
 
             if (_isSaveData)
@@ -367,12 +369,14 @@ namespace ZC
         public NativeArray<PointCvsData> cvsDatas;
 
         public NativeArray<int> hitCount;
+        public float3 transformPosition;
 
         public void Execute()
         {
             for (var i = 0; i < frameFullInfo.Length; i++)
             {
                 ZPointFullInfo info = this.frameFullInfo[i];
+                // info.point -= transformPosition;
                 if (info.isvaild)
                 {
                     cvsDatas[hitCount[0]] = new PointCvsData(info.point.x, info.point.y, info.point.z, info.dir);

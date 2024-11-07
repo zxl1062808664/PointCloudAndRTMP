@@ -82,6 +82,7 @@ namespace ZC
             _hitCountArray.Dispose();
             flattenedPointsFullInfo.Dispose();
             StopAllCoroutines();
+            chatter_pub.Dispose();
         }
 
         ROS2UnityComponent ros2Unity;
@@ -180,7 +181,8 @@ namespace ZC
                 frameInfo = this.flattenedPointsInfo,
                 cvsDatas = this.cvsDatas,
                 hitCount = _hitCountArray,
-                frameFullInfo = flattenedPointsFullInfo
+                frameFullInfo = flattenedPointsFullInfo,
+                transformPosition = transformPosition
             };
 
             var handle4 = removeInvalidResultJob.Schedule(dependsOn: handle3);
@@ -241,22 +243,23 @@ namespace ZC
                 s.Point_step = 16;
                 s.Row_step = s.Width * s.Point_step;
 
-                byte[] buffer = ArrayPool<byte>.Shared.Rent(sizeof(float) * 4 * hitCount);
+                ZPointInfoSerializer.Serialize(frameInfos,hitCount,_camera.transform.position,_camera.transform.rotation,out var buffer);
+                // byte[] buffer = ArrayPool<byte>.Shared.Rent(sizeof(float) * 4 * hitCount);
                 s.Data = buffer;
 
-                var dest = UnsafeUtility.PinGCArrayAndGetDataAddress(buffer, out var handle);
-                try
-                {
-                    var src = frameInfos.GetUnsafePtr();
-                    UnsafeUtility.MemCpy(dest, src, sizeof(float) * 4 * hitCount);
-                }
-                finally
-                {
-                    UnsafeUtility.ReleaseGCObject(handle);
-                }
+                // var dest = UnsafeUtility.PinGCArrayAndGetDataAddress(buffer, out var handle);
+                // try
+                // {
+                //     var src = frameInfos.GetUnsafePtr();
+                //     UnsafeUtility.MemCpy(dest, src, sizeof(float) * 4 * hitCount);
+                // }
+                // finally
+                // {
+                //     UnsafeUtility.ReleaseGCObject(handle);
+                // }
 
                 chatter_pub.Publish(s);
-                ArrayPool<byte>.Shared.Return(buffer);
+                // ArrayPool<byte>.Shared.Return(buffer);
                 s.Dispose();
             }
         }

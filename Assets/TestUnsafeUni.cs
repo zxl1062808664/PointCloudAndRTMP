@@ -47,6 +47,10 @@ namespace Assets
                 var addressOf2 = UnsafeUtility.AddressOf(ref arr2[0]);
                 UnsafeUtility.MemCpy(addressOf2,addressOf1,sizeof(int));
                 Debug.Log(arr2[0]);
+                var l = UnsafeUtility.As<int,long>(ref a1);
+                var add3 = UnsafeUtility.AddressOf(ref l);
+                Debug.Log($"{(long)add1} , {(long)add3}");
+                
 
                 Debug.Log("-------------------------------------");
             }
@@ -62,16 +66,15 @@ namespace Assets
                 *valuePtr = 123;
                 Debug.Log(list1[0]);
                 int[] arr = new int[list1.Count];
-                var asSpan = CollectionsMarshal.AsSpan(list1);
-                foreach (var i in asSpan)
-                {
-                    Debug.Log(i);
-                }
+                // var asSpan = CollectionsMarshal.AsSpan(list1);
+                // foreach (var i in asSpan)
+                // {
+                //     Debug.Log(i);
+                // }
 
                 Debug.Log("11111111111111111111111");
-                ref var pinnableReference = ref asSpan.GetPinnableReference();
-                UnsafeUtility.MemMove(Unsafe.AsPointer(ref arr[0]), Unsafe.AsPointer(ref pinnableReference),
-                    (uint)(list1.Count * sizeof(int)));
+                // ref var pinnableReference = ref asSpan.GetPinnableReference();
+                // UnsafeUtility.MemMove(Unsafe.AsPointer(ref arr[0]), Unsafe.AsPointer(ref pinnableReference),(uint)(list1.Count * sizeof(int)));
                 foreach (var i in arr)
                 {
                     Debug.Log(i);
@@ -140,6 +143,40 @@ namespace Assets
                     UnsafeUtility.ReleaseGCObject(handle);
                     UnsafeUtility.ReleaseGCObject(handle1);
                 }
+            }
+
+            unsafe
+            {
+                
+                Debug.Log("==List扩展=============");
+                var list = new List<int>() { 1, 23, 4, 4, 4, 4 };
+                var span = list.AsSpan();
+                Debug.Log("==AsSpan=============");
+                foreach (var i in span)
+                {
+                    Debug.Log(i);
+                }
+                Debug.Log("==ForceSetCount=============");
+                Debug.Log("=============");
+                list.ForceSetCount(3);
+                foreach (var i in list)
+                {
+                    Debug.Log(i);
+                }
+                Debug.Log("=============");
+                list.ForceSetCount(10);
+                foreach (var i in list)
+                {
+                    Debug.Log(i);
+                }
+                Debug.Log("==创建Span的途径=============");
+                Span<int> span1 = stackalloc int[5] { 1, 2, 3, 3, 4 };
+                Span<int> span2 = new int[5] { 1, 2, 3, 3, 4 };
+                using var nativeArray = new NativeArray<int>(5, Allocator.Temp);
+                Span<int> span3 = nativeArray;
+                Span<int> span4 = new List<int>(){1,2,3,3,4}.AsSpan();
+                ReadOnlySpan<char> span5 = "asdfg".AsSpan();
+                ReadOnlySpan<char> span6 = "asdfg".AsSpan(1,3);//sdf
             }
         }
     }

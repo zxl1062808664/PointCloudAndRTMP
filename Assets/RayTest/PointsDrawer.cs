@@ -22,7 +22,6 @@ namespace ZC
         private ComputeBuffer meshPropertiesBuffer;
         private ComputeBuffer argsBuffer;
         private NativeArray<MeshProperties> _properties;
-        private Unity.Mathematics.Random _random;
 
         [StructLayout(LayoutKind.Explicit, Size = 80)]
         private struct MeshProperties
@@ -60,7 +59,6 @@ namespace ZC
             argsBuffer.SetData(args);
 
             this._properties = new NativeArray<MeshProperties>(this.population, Allocator.Persistent);
-            this._random = Unity.Mathematics.Random.CreateFromIndex(12345);
             //        for (int i = 0; i < population; i++)
             //        {
             //            MeshProperties props = new MeshProperties();
@@ -96,7 +94,7 @@ namespace ZC
             argsBuffer = null;
             this._properties.Dispose();
         }
-        public void Render(NativeArray<ZPointInfo> frames, int hitCount,Bounds bounds, float3 position)
+        public void Render(NativeArray<ZPointInfo> frames, int hitCount,Bounds bounds, float3 position,quaternion rotation)
         {
             TransformJob job = new TransformJob()
             {
@@ -104,6 +102,7 @@ namespace ZC
                 frames = frames,
                 count = hitCount,
                 position=position,
+                rotation = rotation
             };
             job.Schedule(_properties.Length, 1).Complete();
 
@@ -121,6 +120,7 @@ namespace ZC
             public NativeArray<ZPointInfo> frames;
             public int count;
             public float3 position;
+            public quaternion rotation;
 
             public void Execute(int i)
             {
@@ -134,6 +134,7 @@ namespace ZC
                 }
                 var frame = this.frames[i];
                 float3 localPosition =frame.point -position;
+                localPosition = math.mul(math.inverse(rotation),localPosition) ;
                 const float scale = 0.02f;
                 props.mat = math.float4x4(math.float3x3(
                     scale, 0, 0,
